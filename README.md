@@ -1,3 +1,16 @@
+# My Spark Fork
+This a fork of Spark that does not cause a shuffle/repartition when doing a window partition on `spark_partition_id()`. This can allow for `zipWithIndex()` logic to be expressed in dataframes scalably without requiring RDD->Dataframe overhead, which can be relatively large.
+
+## The basic problem I'm trying to solve:
+
+When working in a traditional data warehouse environment where one common procedure is to map business keys to surrogate keys. I was trying to figure out how one would do that with dataframes just as a personal exercise, and got sort of fixated on this when I found there's not really a good way. Either it's not scalable (`row_number` without a partition), has what feels like unnecessary overhead ( `zipWithIndex` and `zipWithUniqueID` are fast and scalable, but going from rdd back to a dataframe is relatively slow), has the potential for large gaps except under relatively specific circumstances ( `monotonically_increasing_id` ), or isn't future-proof ( you can use Pandas udfs to do it without shuffling, but even `Iterator[Series]->Iterator[Series]` functions purposefully don't guarantee the extent of data you get even though right now it's the all the data for a single partition).
+
+So one thing I tried was to emulate `zipWithUniqueID` in dataframes to remove the rdd->dataframe overhead like:
+> `arbitraryWindow = Window.partitionBy(F.spark_partition_id()).orderBy(F.lit(None))`
+> `keys = businessKeyRows.withColumn('SurrogateKey',(F.row_number().over(arbitraryWindow)-1)*F.lit(hashedRows.rdd.getNumPartitions())+F.spark_partition_id())`
+
+But this didn't work since the window function repartitioned and coalesced them into a smaller number of partitions, but still calculated `row_number()` over the original partitions. The added `spark_partition_id()` then returned the new (fewer) partition ids, causing duplicates. So not only did it reduce performance by doing an unnecessary repartition and actually decreasing scalability by reducing the partitions, it caused it to be functionally wrong, too. After my change, it's correct and fast.  (Of course, even with my fix one has to be careful. If I did select with another window function, that could still cause the added `spark_partition_id` to use the wrong partition again due to how the query planner would order things).
+
 # Apache Spark
 
 Spark is a unified analytics engine for large-scale data processing. It provides
