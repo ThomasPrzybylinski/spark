@@ -23,7 +23,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
-import org.apache.spark.sql.catalyst.plans.physical.{AllTuples, ClusteredDistribution, Distribution, Partitioning}
+import org.apache.spark.sql.catalyst.plans.physical.{AllTuples, ClusteredDistribution, Distribution, Partitioning, UnspecifiedDistribution}
 import org.apache.spark.sql.execution.UnaryExecNode
 import org.apache.spark.sql.types._
 import org.apache.spark.util.collection.Utils
@@ -45,6 +45,9 @@ trait WindowExecBase extends UnaryExecNode {
       logWarning("No Partition Defined for Window operation! Moving all data to a single "
         + "partition, this can cause serious performance degradation.")
       AllTuples :: Nil
+    }
+    else if (partitionSpec.size == 1 && partitionSpec(0) == SparkPartitionID()) {
+      UnspecifiedDistribution :: Nil
     } else {
       ClusteredDistribution(partitionSpec) :: Nil
     }

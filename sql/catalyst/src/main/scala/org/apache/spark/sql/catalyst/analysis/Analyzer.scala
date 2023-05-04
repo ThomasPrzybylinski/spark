@@ -2975,7 +2975,7 @@ class Analyzer(override val catalogManager: CatalogManager) extends RuleExecutor
 
           // Extracts expressions from the partition spec and order spec.
           case wsc @ WindowSpecDefinition(partitionSpec, orderSpec, _) =>
-            val newPartitionSpec = partitionSpec.map(extractExpr)
+            val newPartitionSpec = extractPartitions(extractExpr _, partitionSpec)
             val newOrderSpec = orderSpec.map { so =>
               val newChild = extractExpr(so.child)
               so.copy(child = newChild)
@@ -3013,6 +3013,16 @@ class Analyzer(override val catalogManager: CatalogManager) extends RuleExecutor
       (newExpressionsWithWindowFunctions, regularExpressions ++ extractedExprMap.values)
     } // end of extract
 
+
+    private def extractPartitions(
+       extractExpr: Expression => Expression,
+       partitionSpec: Seq[Expression]) = {
+      if (partitionSpec.size == 1 && partitionSpec(0) == SparkPartitionID()) {
+        partitionSpec
+      } else {
+        partitionSpec.map(extractExpr)
+      }
+    }
     /**
      * Adds operators for Window Expressions. Every Window operator handles a single Window Spec.
      */
